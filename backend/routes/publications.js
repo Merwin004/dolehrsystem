@@ -1,11 +1,110 @@
-const express = require('express');
-const multer  = require('multer');
-const path    = require('path');
-const fs      = require('fs');
-const { db }  = require('../database/db');
+const express      = require('express');
+const multer       = require('multer');
+const path         = require('path');
+const fs           = require('fs');
+const nodemailer   = require('nodemailer');
+const { db }       = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 let blobPut;
 try { blobPut = require('@vercel/blob').put; } catch {}
+
+// ── Email transporter ─────────────────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+});
+
+const STAGE_LABELS = { rse: 'Rating Sheet Evaluation (RSE)', exam: 'Written Examination', inter: 'Interview' };
+
+async function notifyApplicantsSchedule(publicationId, stage, schedule) {
+  const label = STAGE_LABELS[stage];
+  if (!label || !schedule) return;
+
+  // Format schedule datetime nicely
+  const dt     = new Date(schedule);
+  const fmtDt  = isNaN(dt)
+    ? schedule
+    : dt.toLocaleString('en-PH', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' });
+
+  // Get publication info + all applicants for this position
+  const [pubRes, appRes] = await Promise.all([
+    db.execute('SELECT position, plantilla_item, department FROM publications WHERE id=?', [publicationId]),
+    db.execute('SELECT full_name, email FROM applicants WHERE publication_id=? AND email IS NOT NULL AND email != ""', [publicationId]),
+  ]);
+
+  const pub        = pubRes.rows[0];
+  if (!pub || appRes.rows.length === 0) return;
+
+  for (const applicant of appRes.rows) {
+    try {
+      await transporter.sendMail({
+        from: `"DOLE Automated Email" <${process.env.EMAIL_USER}>`,
+        to: applicant.email,
+        subject: `Schedule Notice — ${label} | ${pub.position}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+            <div style="background:#1d4ed8;padding:26px 24px;text-align:center;">
+              <div style="color:#fff;font-size:18px;font-weight:800;">Department of Labor and Employment</div>
+              <div style="color:#bfdbfe;font-size:13px;margin-top:4px;">HR Tracking System — Schedule Notification</div>
+            </div>
+            <div style="padding:28px 24px;">
+              <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#1e293b;">Dear ${applicant.full_name || 'Applicant'},</p>
+              <p style="margin:0 0 20px;font-size:13px;color:#475569;line-height:1.6;">
+                We are pleased to inform you that a schedule has been set for your application.
+                Please take note of the details below and make sure to attend on the given date and time.
+              </p>
+
+              <!-- Schedule card -->
+              <div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:12px;padding:20px 22px;margin-bottom:20px;text-align:center;">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.7px;color:#2563eb;text-transform:uppercase;margin-bottom:8px;">Your Schedule</div>
+                <div style="font-size:20px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">${label}</div>
+                <div style="font-size:16px;font-weight:700;color:#1e293b;">${fmtDt}</div>
+              </div>
+
+              <!-- Position summary -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:20px;">
+                <div style="padding:10px 16px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:.6px;color:#64748b;text-transform:uppercase;">Position Details</span>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;width:40%;">Position</td>
+                    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#2563eb;">${pub.plantilla_item} — ${pub.position}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 16px;font-size:13px;color:#64748b;">Office</td>
+                    <td style="padding:10px 16px;font-size:13px;color:#1e293b;">${pub.department}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+                <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px;">📌 Important Reminder</div>
+                <p style="margin:0;font-size:13px;color:#b45309;line-height:1.65;">
+                  Please bring all required documents and a valid government-issued ID on the day of your schedule.
+                  Failure to appear without prior notice may result in disqualification.
+                </p>
+              </div>
+
+              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
+                If you have any concerns, please contact the DOLE Human Resource Management Office directly.
+                Do not reply to this automated email.
+              </p>
+            </div>
+            <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;text-align:center;font-size:11px;color:#94a3b8;">
+              DOLE HR Tracking System &mdash; Official Use Only
+            </div>
+          </div>
+        `,
+      });
+      console.log(`[schedule notify] Sent ${label} schedule to ${applicant.email}`);
+    } catch (e) {
+      console.error(`[schedule notify] Failed to send to ${applicant.email}:`, e.message);
+    }
+  }
+}
 
 const router = express.Router();
 
@@ -372,16 +471,19 @@ router.patch('/:id/prod-status', requireAuth, async (req, res) => {
           "UPDATE publications SET prod_status=?, rse_schedule=?, prod_since=datetime('now','+8 hours'), updated_at=datetime('now','+8 hours') WHERE id=?",
           [next, schedule, req.params.id]
         );
+        notifyApplicantsSchedule(req.params.id, 'rse', schedule).catch(e => console.error('[notify]', e.message));
       } else if (next === 'exam' && schedule) {
         await db.execute(
           "UPDATE publications SET prod_status=?, exam_schedule=?, prod_since=datetime('now','+8 hours'), updated_at=datetime('now','+8 hours') WHERE id=?",
           [next, schedule, req.params.id]
         );
+        notifyApplicantsSchedule(req.params.id, 'exam', schedule).catch(e => console.error('[notify]', e.message));
       } else if (next === 'inter' && schedule) {
         await db.execute(
           "UPDATE publications SET prod_status=?, inter_schedule=?, prod_since=datetime('now','+8 hours'), updated_at=datetime('now','+8 hours') WHERE id=?",
           [next, schedule, req.params.id]
         );
+        notifyApplicantsSchedule(req.params.id, 'inter', schedule).catch(e => console.error('[notify]', e.message));
       } else {
         await db.execute(
           "UPDATE publications SET prod_status=?, prod_since=datetime('now','+8 hours'), updated_at=datetime('now','+8 hours') WHERE id=?",
@@ -403,6 +505,8 @@ router.patch('/:id/set-schedule', requireAuth, async (req, res) => {
       `UPDATE publications SET ${col}=?, updated_at=datetime('now','+8 hours') WHERE id=?`,
       [schedule, req.params.id]
     )
+    const stageMap = { rse_schedule: 'rse', exam_schedule: 'exam', inter_schedule: 'inter' }
+    notifyApplicantsSchedule(req.params.id, stageMap[col], schedule).catch(e => console.error('[notify]', e.message))
     res.json({ message: 'Schedule saved.', col, schedule })
   } catch (err) { console.error(err); res.status(500).json({ message: 'Internal server error' }) }
 })
