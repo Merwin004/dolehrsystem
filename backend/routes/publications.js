@@ -156,8 +156,8 @@ router.get('/stats', requireAuth, async (req, res) => {
     };
     const role = req.session.user?.role;
     const dept = req.session.user?.department;
-    const rspu_turn = `('eval','delib','rprep','assume')`;
-    const hrmo_turn = `('pending','rse','exam','inter','ree','appt')`;
+    const rspu_turn = `('delib','rprep','assume')`;
+    const hrmo_turn = `('pending','eval','rse','exam','inter','ree','appt')`;
     const myTurnStatuses = role === 'rspu' ? rspu_turn : hrmo_turn;
     // HRMO: only count items from their own department
     const deptClause = (role === 'hrmo' && dept) ? ` AND department LIKE '%${dept}%'` : '';
@@ -409,7 +409,7 @@ router.post('/publish-batch', requireAuth, upload.single('attachment'), async (r
 // canRepublish = both hrmo (office-matched) and rspu can send to Republication
 const STATUS_TRANSITIONS = {
   pending:{ next: 'eval',     roles: ['hrmo'] },
-  eval:   { next: 'rse',     roles: ['rspu'] },
+  eval:   { next: 'rse',     roles: ['hrmo'] },
   rse:    { next: 'exam',    roles: ['hrmo'] },
   exam:   { next: 'inter',   roles: ['hrmo'] },
   inter:  { next: 'delib',   roles: ['hrmo'] },
