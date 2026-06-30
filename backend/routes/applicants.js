@@ -10,6 +10,18 @@ try { blobPut = require('@vercel/blob').put; } catch {}
 
 const router = express.Router();
 
+// ── Department notification emails ───────────────────────────────────────────
+const DEPT_EMAILS = {
+  PS: 'merwinluistro25@gmail.com',
+  // Add other departments here later:
+  // AS:   'as@dole.gov.ph',
+  // FMS:  'fms@dole.gov.ph',
+  // IAS:  'ias@dole.gov.ph',
+  // IPS:  'ips@dole.gov.ph',
+  // LS:   'ls@dole.gov.ph',
+  // HRDS: 'hrds@dole.gov.ph',
+};
+
 // ── Gmail transporter ────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
@@ -242,6 +254,74 @@ async function sendOTPEmail(to, code, positionTitle) {
   });
 }
 
+async function sendDepartmentNotification(department, { full_name, email, position, plantilla_item, submitted_at }) {
+  // Match department abbreviation from the department string (e.g. "Planning Service" → "PS")
+  const deptKey = Object.keys(DEPT_EMAILS).find(key =>
+    (department || '').toUpperCase().includes(key)
+  );
+  if (!deptKey) return; // no email configured for this department yet
+
+  const to = DEPT_EMAILS[deptKey];
+
+  const [datePart, timePart] = (submitted_at || '').split(' ');
+  const [year, month, day]   = (datePart || '').split('-').map(Number);
+  const [hour, minute]       = (timePart || '').split(':').map(Number);
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const h12    = hour % 12 || 12;
+  const ampm   = hour < 12 ? 'AM' : 'PM';
+  const date   = `${months[month - 1]} ${day}, ${year} at ${h12}:${String(minute).padStart(2,'0')} ${ampm}`;
+
+  await transporter.sendMail({
+    from: `"DOLE HR Tracking System" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: `New Applicant — ${position} (${plantilla_item})`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#1d4ed8;padding:26px 24px;text-align:center;">
+          <div style="color:#fff;font-size:18px;font-weight:800;">Department of Labor and Employment</div>
+          <div style="color:#bfdbfe;font-size:13px;margin-top:4px;">HR Tracking System — New Application Received</div>
+        </div>
+        <div style="padding:28px 24px;">
+          <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:#1e293b;">New Applicant Notification</p>
+          <p style="margin:0 0 20px;font-size:13px;color:#475569;line-height:1.6;">
+            A new application has been submitted for a position under <strong>${department}</strong>.
+            Please log in to the HR Tracking System to review the applicant's documents.
+          </p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+            <div style="padding:10px 16px;background:#eff6ff;border-bottom:1px solid #dbeafe;">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.6px;color:#2563eb;text-transform:uppercase;">Applicant Details</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;width:40%;">Full Name</td>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:700;color:#1e293b;">${full_name}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">Email</td>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b;">${email}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">Position Applied</td>
+                <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#2563eb;">${plantilla_item} — ${position}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;font-size:13px;color:#64748b;">Date Submitted</td>
+                <td style="padding:10px 16px;font-size:13px;color:#1e293b;">${date}</td>
+              </tr>
+            </table>
+          </div>
+          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
+            This is an automated notification. Please do not reply to this email.
+          </p>
+        </div>
+        <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;text-align:center;font-size:11px;color:#94a3b8;">
+          DOLE HR Tracking System &mdash; Official Use Only
+        </div>
+      </div>
+    `,
+  });
+}
+
 // ── Send OTP ─────────────────────────────────────────────────────────────────
 router.post('/send-otp', async (req, res) => {
   try {
@@ -389,6 +469,18 @@ router.post('/', upload.fields(docFields), async (req, res) => {
       });
     } catch (e) {
       console.error('[confirmation email failed]', e.message);
+    }
+
+    try {
+      await sendDepartmentNotification(pubData.department || '', {
+        full_name,
+        email,
+        position:       pubData.position       || '',
+        plantilla_item: pubData.plantilla_item || '',
+        submitted_at:   r.rows[0].submitted_at,
+      });
+    } catch (e) {
+      console.error('[department notification email failed]', e.message);
     }
 
     res.status(201).json({ ...r.rows[0], id: Number(r.rows[0].id) });
