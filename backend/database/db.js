@@ -208,7 +208,8 @@ async function initDB() {
   try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_pds    TEXT'); } catch {}
   try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_tor    TEXT'); } catch {}
   try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_cse    TEXT'); } catch {}
-  try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_wes    TEXT'); } catch {}
+  try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_wes      TEXT'); } catch {}
+  try { await db.execute('ALTER TABLE applicants ADD COLUMN doc_training TEXT'); } catch {}
 
   // Relax NOT NULL on first_name/last_name so public applicants using full_name don't fail
   const appColInfo = (await db.execute("PRAGMA table_info('applicants')")).rows;

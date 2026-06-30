@@ -139,7 +139,7 @@
 
             <!-- Documents -->
             <div class="info-label" style="margin-bottom:14px">Submitted Documents</div>
-            <div v-if="!detail.doc_letter && !detail.doc_pds && !detail.doc_tor && !detail.doc_cse && !detail.doc_wes"
+            <div v-if="!detail.doc_letter && !detail.doc_pds && !detail.doc_tor && !detail.doc_cse && !detail.doc_wes && !detail.doc_training"
                  style="font-size:13px;color:var(--text-3);font-style:italic">No documents submitted.</div>
             <div v-else class="doc-grid">
               <div v-if="detail.doc_letter" class="doc-card">
@@ -176,6 +176,13 @@
                   <span class="doc-file">{{ detail.doc_wes }}</span>
                 </div>
                 <button class="doc-view-btn" @click="openPdf(detail.doc_wes, 'Work Experience Sheet')">View</button>
+              </div>
+              <div v-if="detail.doc_training" class="doc-card">
+                <div class="doc-info">
+                  <span class="doc-name">Training Certificates</span>
+                  <span class="doc-file">{{ detail.doc_training }}</span>
+                </div>
+                <button class="doc-view-btn" @click="openPdf(detail.doc_training, 'Training Certificates')">View</button>
               </div>
             </div>
           </div>

@@ -56,11 +56,12 @@ async function storeFile(file) {
 }
 
 const docFields = [
-  { name: 'doc_letter', maxCount: 1 },
-  { name: 'doc_pds',    maxCount: 1 },
-  { name: 'doc_tor',    maxCount: 1 },
-  { name: 'doc_cse',    maxCount: 1 },
-  { name: 'doc_wes',    maxCount: 1 },
+  { name: 'doc_letter',   maxCount: 1 },
+  { name: 'doc_pds',      maxCount: 1 },
+  { name: 'doc_tor',      maxCount: 1 },
+  { name: 'doc_cse',      maxCount: 1 },
+  { name: 'doc_wes',      maxCount: 1 },
+  { name: 'doc_training', maxCount: 1 },
 ];
 
 function genOTP() {
@@ -88,11 +89,12 @@ db.execute('DELETE FROM otps WHERE expires < ?', [Date.now()]).catch(() => {});
 
 async function sendConfirmationEmail(to, { full_name, position, plantilla_item, department, submitted_at, docs }) {
   const docLabels = {
-    doc_letter: 'Letter of Intent',
-    doc_pds:    'Personal Data Sheet',
-    doc_tor:    'Transcript of Records',
-    doc_cse:    'Civil Service Eligibility',
-    doc_wes:    'Work Experience Sheet',
+    doc_letter:   'Letter of Intent',
+    doc_pds:      'Personal Data Sheet',
+    doc_tor:      'Transcript of Records',
+    doc_cse:      'Civil Service Eligibility',
+    doc_wes:      'Work Experience Sheet',
+    doc_training: 'Training Certificates',
   };
 
   const attachments = Object.entries(docs)
@@ -345,23 +347,24 @@ router.post('/', upload.fields(docFields), async (req, res) => {
 
     // Store uploaded files (Blob on Vercel, local disk otherwise)
     const files = req.files || {};
-    const [docLetter, docPds, docTor, docCse, docWes] = await Promise.all([
+    const [docLetter, docPds, docTor, docCse, docWes, docTraining] = await Promise.all([
       storeFile(files.doc_letter?.[0]),
       storeFile(files.doc_pds?.[0]),
       storeFile(files.doc_tor?.[0]),
       storeFile(files.doc_cse?.[0]),
       storeFile(files.doc_wes?.[0]),
+      storeFile(files.doc_training?.[0]),
     ]);
 
     const result = await db.execute(`
       INSERT INTO applicants
-        (publication_id, full_name, first_name, last_name, email, doc_letter, doc_pds, doc_tor, doc_cse, doc_wes)
-      VALUES (?,?,?,?,?,?,?,?,?,?)
+        (publication_id, full_name, first_name, last_name, email, doc_letter, doc_pds, doc_tor, doc_cse, doc_wes, doc_training)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
     `, [
       publication_id, full_name,
       full_name, '',
       email,
-      docLetter, docPds, docTor, docCse, docWes,
+      docLetter, docPds, docTor, docCse, docWes, docTraining,
     ]);
 
     // Consume OTP
@@ -382,7 +385,7 @@ router.post('/', upload.fields(docFields), async (req, res) => {
         plantilla_item: pubData.plantilla_item || '',
         department:     pubData.department     || '',
         submitted_at:   r.rows[0].submitted_at,
-        docs: { doc_letter: docLetter, doc_pds: docPds, doc_tor: docTor, doc_cse: docCse, doc_wes: docWes },
+        docs: { doc_letter: docLetter, doc_pds: docPds, doc_tor: docTor, doc_cse: docCse, doc_wes: docWes, doc_training: docTraining },
       });
     } catch (e) {
       console.error('[confirmation email failed]', e.message);

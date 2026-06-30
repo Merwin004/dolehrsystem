@@ -406,11 +406,12 @@ const privacyPos   = ref(null)
 const privacyChecked = ref(false)
 
 const docSlots = [
-  { field: 'doc_letter', label: 'Letter of Intent',      icon: '✉️' },
-  { field: 'doc_pds',    label: 'Personal Data Sheet',   icon: '👤' },
-  { field: 'doc_tor',    label: 'Transcript of Records', icon: '🎓' },
-  { field: 'doc_cse',    label: 'Civil Service Eligibility', icon: '🛡️' },
-  { field: 'doc_wes',    label: 'Work Experience Sheet', icon: '💼' },
+  { field: 'doc_letter',   label: 'Letter of Intent',        icon: '✉️' },
+  { field: 'doc_pds',      label: 'Personal Data Sheet',     icon: '👤' },
+  { field: 'doc_tor',      label: 'Transcript of Records',   icon: '🎓' },
+  { field: 'doc_cse',      label: 'Civil Service Eligibility', icon: '🛡️' },
+  { field: 'doc_wes',      label: 'Work Experience Sheet',   icon: '💼' },
+  { field: 'doc_training', label: 'Training Certificates',   icon: '📜' },
 ]
 
 const fm = ref({ full_name:'', email:'', otp:'', docs: {} })
